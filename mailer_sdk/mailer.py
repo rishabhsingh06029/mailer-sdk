@@ -138,46 +138,43 @@ class Mailer:
             finally:
                 self._conn = None
 
-   def send(self, to, subject, body, html=False, cc=None, bcc=None, attachments=None) -> dict:
+    def send(self, to, subject, body, html=False, cc=None, bcc=None, attachments=None) -> dict:
+        if not to:
+            raise ValidationError(400, "'to' address is required.")
+        try:
+            msg            = MIMEMultipart()
+            msg["From"]    = self.email
+            msg["To"]      = ", ".join(to) if isinstance(to, list) else to
+            msg["Subject"] = subject
+            if cc:  msg["Cc"]  = ", ".join(cc)
+            if bcc: msg["Bcc"] = ", ".join(bcc)
 
-    #  Validate BEFORE the try block — won't get swallowed
-    if not to:
-        raise ValidationError(400, "'to' address is required.")
+            msg.attach(MIMEText(body, "html" if html else "plain"))
 
-    try:
-        msg            = MIMEMultipart()
-        msg["From"]    = self.email
-        msg["To"]      = ", ".join(to) if isinstance(to, list) else to
-        msg["Subject"] = subject
-        if cc:  msg["Cc"]  = ", ".join(cc)
-        if bcc: msg["Bcc"] = ", ".join(bcc)
+            for path in (attachments or []):
+                with open(path, "rb") as f:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(f.read())
+                encoders.encode_base64(part)
+                filename = path.split("/")[-1]
+                part.add_header("Content-Disposition", f"attachment; filename={filename}")
+                msg.attach(part)
 
-        msg.attach(MIMEText(body, "html" if html else "plain"))
+            recipients = (
+                (to if isinstance(to, list) else [to]) +
+                (cc or []) + (bcc or [])
+            )
 
-        for path in (attachments or []):
-            with open(path, "rb") as f:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(f.read())
-            encoders.encode_base64(part)
-            filename = path.split("/")[-1]
-            part.add_header("Content-Disposition", f"attachment; filename={filename}")
-            msg.attach(part)
+            self._conn.sendmail(self.email, recipients, msg.as_string())
+            logger.info("Email sent to: %s", recipients)
+            return {"success": True, "to": recipients}
 
-        recipients = (
-            (to if isinstance(to, list) else [to]) +
-            (cc or []) + (bcc or [])
-        )
+        except MailerException:
+            raise  #  let our own exceptions bubble up untouched
 
-        self._conn.sendmail(self.email, recipients, msg.as_string())
-        logger.info("Email sent to: %s", recipients)
-        return {"success": True, "to": recipients}
-
-    except MailerException:
-        raise  #  let our own exceptions bubble up untouched
-
-    except Exception as e:
-        logger.error("Send failed: %s", str(e))
-        raise SendError(500, str(e))  # only wraps true unexpected errors
+        except Exception as e:
+            logger.error("Send failed: %s", str(e))
+            raise SendError(500, str(e))  # only wraps true unexpected errors
     # ── Helpers ────────────────────────────────────────────────
 
     def send_html(
