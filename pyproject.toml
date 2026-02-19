@@ -38,11 +38,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/yourusername/mailer-sdk"
-Documentation = "https://github.com/yourusername/mailer-sdk#readme"
-Repository    = "https://github.com/yourusername/mailer-sdk"
-"Bug Tracker" = "https://github.com/yourusername/mailer-sdk/issues"
-Changelog     = "https://github.com/yourusername/mailer-sdk/blob/main/CHANGELOG.md"
+Homepage      = "https://github.com/rishabhsingh06029/mailer-sdk"
+Documentation = "https://github.com/rishabhsingh06029/mailer-sdk#readme"
+Repository    = "https://github.com/rishabhsingh06029/mailer-sdk"
+"Bug Tracker" = "https://github.com/rishabhsingh06029/mailer-sdk/issues"
+Changelog     = "https://github.com/rishabhsingh06029/mailer-sdk/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
