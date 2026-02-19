@@ -138,77 +138,46 @@ class Mailer:
             finally:
                 self._conn = None
 
-    # ── Core Send ──────────────────────────────────────────────
+   def send(self, to, subject, body, html=False, cc=None, bcc=None, attachments=None) -> dict:
 
-    def send(
-        self,
-        to         : Union[str, List[str]],
-        subject    : str,
-        body       : str,
-        html       : bool = False,
-        cc         : Optional[List[str]] = None,
-        bcc        : Optional[List[str]] = None,
-        attachments: Optional[List[str]] = None,
-    ) -> dict:
-        """
-        Send an email.
+    #  Validate BEFORE the try block — won't get swallowed
+    if not to:
+        raise ValidationError(400, "'to' address is required.")
 
-        Args:
-            to          (str | list): Recipient address(es).
-            subject     (str):        Email subject line.
-            body        (str):        Email body — plain text or HTML.
-            html        (bool):       Set True if body is HTML. Default: False.
-            cc          (list):       Optional CC addresses.
-            bcc         (list):       Optional BCC addresses.
-            attachments (list):       Optional list of file paths to attach.
+    try:
+        msg            = MIMEMultipart()
+        msg["From"]    = self.email
+        msg["To"]      = ", ".join(to) if isinstance(to, list) else to
+        msg["Subject"] = subject
+        if cc:  msg["Cc"]  = ", ".join(cc)
+        if bcc: msg["Bcc"] = ", ".join(bcc)
 
-        Returns:
-            dict: {'success': True,  'to': [...]}
-               or {'success': False, 'error': '...', 'code': 500}
+        msg.attach(MIMEText(body, "html" if html else "plain"))
 
-        Raises:
-            ValidationError: If recipient address is missing.
-            SendError:       If message delivery fails.
+        for path in (attachments or []):
+            with open(path, "rb") as f:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(f.read())
+            encoders.encode_base64(part)
+            filename = path.split("/")[-1]
+            part.add_header("Content-Disposition", f"attachment; filename={filename}")
+            msg.attach(part)
 
-        Example:
-            >>> mailer.send(to='friend@x.com', subject='Hi', body='Hello!')
-            {'success': True, 'to': ['friend@x.com']}
-        """
-        if not to:
-            raise ValidationError(400, "'to' address is required.")
+        recipients = (
+            (to if isinstance(to, list) else [to]) +
+            (cc or []) + (bcc or [])
+        )
 
-        try:
-            msg            = MIMEMultipart()
-            msg["From"]    = self.email
-            msg["To"]      = ", ".join(to) if isinstance(to, list) else to
-            msg["Subject"] = subject
-            if cc:  msg["Cc"]  = ", ".join(cc)
-            if bcc: msg["Bcc"] = ", ".join(bcc)
+        self._conn.sendmail(self.email, recipients, msg.as_string())
+        logger.info("Email sent to: %s", recipients)
+        return {"success": True, "to": recipients}
 
-            msg.attach(MIMEText(body, "html" if html else "plain"))
+    except MailerException:
+        raise  #  let our own exceptions bubble up untouched
 
-            for path in (attachments or []):
-                with open(path, "rb") as f:
-                    part = MIMEBase("application", "octet-stream")
-                    part.set_payload(f.read())
-                encoders.encode_base64(part)
-                filename = path.split("/")[-1]
-                part.add_header("Content-Disposition", f"attachment; filename={filename}")
-                msg.attach(part)
-
-            recipients = (
-                (to if isinstance(to, list) else [to]) +
-                (cc or []) + (bcc or [])
-            )
-
-            self._conn.sendmail(self.email, recipients, msg.as_string())
-            logger.info("Email sent to: %s", recipients)
-            return {"success": True, "to": recipients}
-
-        except Exception as e:
-            logger.error("Send failed: %s", str(e))
-            raise SendError(500, str(e))
-
+    except Exception as e:
+        logger.error("Send failed: %s", str(e))
+        raise SendError(500, str(e))  # only wraps true unexpected errors
     # ── Helpers ────────────────────────────────────────────────
 
     def send_html(
