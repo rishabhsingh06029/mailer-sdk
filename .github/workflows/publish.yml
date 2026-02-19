@@ -1,0 +1,63 @@
+name: CI / Publish to PyPI
+
+on:
+  push:
+    branches: [main]
+    tags:     ["v*.*.*"]          # triggers publish on v1.0.0, v1.1.0 etc.
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Run Tests ───────────────────────────────────────────────
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: |
+          pip install pytest pytest-cov
+          pip install -e .
+
+      - name: Run tests
+        run: pytest tests/ -v --cov=mailer_sdk --cov-report=term-missing
+
+  # ── Publish to PyPI (only on version tag) ───────────────────
+  publish:
+    name: Publish to PyPI
+    needs: test                   # only publish if tests pass
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      id-token: write             # required for PyPI trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build distribution
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses PyPI Trusted Publishing — no API token needed
+        # Set up at: pypi.org → Your project → Publishing → Add publisher
