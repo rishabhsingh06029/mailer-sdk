@@ -199,4 +199,4 @@ logging.getLogger("mailer_sdk").setLevel(logging.ERROR)
 
 ## License
 
-MIT © Your Name
+DT © Rishabh

@@ -27,7 +27,7 @@ from .mailer import (
     ValidationError,
 )
 
-__version__ = "1.0.2"
+__version__ = "1.0.9"
 __author__  = "rishabh"
 __email__   = "rishabhsingh06029@gmail.com"
 __license__ = "MIT"

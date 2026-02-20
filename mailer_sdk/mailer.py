@@ -61,7 +61,7 @@ class Mailer:
         ...     mailer.send(to='friend@example.com', subject='Hi', body='Hello!')
     """
 
-    __version__ = "1.0.0"
+    __version__ = "1.0.9"
 
     def __init__(
         self,
@@ -218,12 +218,12 @@ class Mailer:
             html       (bool): Set True if body is HTML. Default: False.
 
         Returns:
-            dict: {'sent': 2, 'failed': 1, 'total': 3, 'details': [...]}
+           
 
         Example:
             >>> mailer.send_bulk(['a@x.com', 'b@x.com'], 'News', 'Hello!')
         """
-        results = []
+        results = [] dict: {'sent': 2, 'failed': 1, 'total': 3, 'details': [...]}
         for recipient in recipients:
             try:
                 result = self.send(to=recipient, subject=subject, body=body, html=html)
