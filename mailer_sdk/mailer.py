@@ -16,38 +16,21 @@ PROVIDERS = {
     "yahoo":   {"host": "smtp.mail.yahoo.com", "port": 587},
 }
 
-# ── Custom Exceptions ──────────────────────────────────────────
 class MailerException(Exception):
-    """Base exception for all Mailer errors."""
     def __init__(self, code: int, message: str):
         self.code    = code
         self.message = message
         super().__init__(f"[{code}] {message}")
 
-class AuthError(MailerException):
-    """Raised when SMTP authentication fails."""
-    pass
-
-class ConnectError(MailerException):
-    """Raised when connection to SMTP server fails."""
-    pass
-
-class SendError(MailerException):
-    """Raised when email delivery fails."""
-    pass
-
-class ValidationError(MailerException):
-    """Raised when input validation fails."""
-    pass
+class AuthError(MailerException):    pass
+class ConnectError(MailerException): pass
+class SendError(MailerException):    pass
+class ValidationError(MailerException): pass
 
 
-# ── Mailer Class ───────────────────────────────────────────────
 class Mailer:
     """
     A simple, production-ready SMTP email client.
-
-    Supports Gmail, Outlook, and Yahoo out of the box.
-    Credentials can be passed directly or via environment variables.
 
     Args:
         email    (str): Sender email address. Falls back to MAILER_EMAIL env var.
@@ -92,25 +75,9 @@ class Mailer:
         self.host = cfg["host"]
         self.port = cfg["port"]
 
-    # ── Connection ─────────────────────────────────────────────
-
     def connect(self) -> "Mailer":
-        """
-        Open and authenticate an SMTP connection.
-
-        Returns:
-            Mailer: self (for chaining)
-
-        Raises:
-            AuthError:    If credentials are invalid.
-            ConnectError: If the SMTP server is unreachable.
-
-        Example:
-            >>> mailer.connect()
-        """
         if self._conn:
-            return self  # idempotent — already connected
-
+            return self
         try:
             logger.info("Connecting to %s:%s ...", self.host, self.port)
             self._conn = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
@@ -124,11 +91,9 @@ class Mailer:
             raise ConnectError(500, f"Could not connect to {self.host}:{self.port}. Detail: {e}")
         except Exception as e:
             raise ConnectError(500, str(e))
-
         return self
 
     def disconnect(self) -> None:
-        """Close the SMTP connection."""
         if self._conn:
             try:
                 self._conn.quit()
@@ -137,11 +102,20 @@ class Mailer:
                 pass
             finally:
                 self._conn = None
-                #comment
 
-    def send(self, to, subject, body, html=False, cc=None, bcc=None, attachments=None) -> dict:
+    def send(
+        self,
+        to         : Union[str, List[str]],
+        subject    : str,
+        body       : str,
+        html       : bool = False,
+        cc         : Optional[List[str]] = None,
+        bcc        : Optional[List[str]] = None,
+        attachments: Optional[List[str]] = None,
+    ) -> dict:
         if not to:
             raise ValidationError(400, "'to' address is required.")
+
         try:
             msg            = MIMEMultipart()
             msg["From"]    = self.email
@@ -171,12 +145,11 @@ class Mailer:
             return {"success": True, "to": recipients}
 
         except MailerException:
-            raise  #  let our own exceptions bubble up untouched
+            raise
 
         except Exception as e:
             logger.error("Send failed: %s", str(e))
-            raise SendError(500, str(e))  # only wraps true unexpected errors
-    # ── Helpers ────────────────────────────────────────────────
+            raise SendError(500, str(e))
 
     def send_html(
         self,
@@ -198,7 +171,6 @@ class Mailer:
         Example:
             >>> mailer.send_html(to='x@x.com', subject='Hi', body='<h1>Hello!</h1>')
         """
-        print(self.send)
         return self.send(to, subject, body, html=True)
 
     def send_bulk(
@@ -218,12 +190,12 @@ class Mailer:
             html       (bool): Set True if body is HTML. Default: False.
 
         Returns:
-           
+            dict: {'sent': 2, 'failed': 1, 'total': 3, 'details': [...]}
 
         Example:
             >>> mailer.send_bulk(['a@x.com', 'b@x.com'], 'News', 'Hello!')
         """
-        results = [] dict: {'sent': 2, 'failed': 1, 'total': 3, 'details': [...]}
+        results = []
         for recipient in recipients:
             try:
                 result = self.send(to=recipient, subject=subject, body=body, html=html)
@@ -306,29 +278,26 @@ class Mailer:
             try:
                 return self.send(to, subject, body, html=html)
             except AuthError:
-                raise  # don't retry auth failures — won't fix themselves
+                raise
             except SendError as e:
                 last_error = e
-                wait = backoff * (2 ** attempt)  # 1s → 2s → 4s
+                wait = backoff * (2 ** attempt)
                 logger.warning(
                     "Attempt %d/%d failed. Retrying in %ds... (%s)",
                     attempt + 1, max_retries, wait, e.message
                 )
                 time.sleep(wait)
 
-        return {"success": False, "error": f"Max retries ({max_retries}) exceeded. Last error: {last_error.message}"}
-
-    # ── Representation ─────────────────────────────────────────
+        error_msg = last_error.message if last_error else "Unknown error"
+        return {"success": False, "error": f"Max retries ({max_retries}) exceeded. Last error: {error_msg}"}
 
     def __repr__(self) -> str:
         masked = self.email[:4] + "****" if self.email else "None"
         return f"Mailer(email={masked}, provider={self.provider}, connected={self._conn is not None})"
-
-    # ── Context Manager ────────────────────────────────────────
 
     def __enter__(self) -> "Mailer":
         return self.connect()
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         self.disconnect()
-        return False  # don't suppress exceptions
+        return False
