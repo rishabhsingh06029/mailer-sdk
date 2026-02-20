@@ -198,6 +198,7 @@ class Mailer:
         Example:
             >>> mailer.send_html(to='x@x.com', subject='Hi', body='<h1>Hello!</h1>')
         """
+        print(self.send)
         return self.send(to, subject, body, html=True)
 
     def send_bulk(
