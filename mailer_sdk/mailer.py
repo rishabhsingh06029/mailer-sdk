@@ -137,6 +137,7 @@ class Mailer:
                 pass
             finally:
                 self._conn = None
+                #comment
 
     def send(self, to, subject, body, html=False, cc=None, bcc=None, attachments=None) -> dict:
         if not to:
